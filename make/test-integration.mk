@@ -17,6 +17,7 @@ test-nocache: wasmvm-libs
 .PHONY: test-full
 test-full: wasmvm-libs
 	$(GO_TEST) -v $(BUILD_FLAGS) $(TEST_MODULES)
+	$(GO_TEST) -v $(BUILD_FLAGS) -tags='$(build_tags_cs),recoverylock_test' ./app/ ./app/recoverylock/
 
 .PHONY: test-integration
 test-integration:

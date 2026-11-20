@@ -77,6 +77,7 @@ import (
 
 	sinktypes "pkg.akt.dev/go/node/sink/v1"
 
+	"pkg.akt.dev/node/v2/app/recoverylock"
 	akeeper "pkg.akt.dev/node/v2/x/audit/keeper"
 	bmekeeper "pkg.akt.dev/node/v2/x/bme/keeper"
 	ckeeper "pkg.akt.dev/node/v2/x/cert/keeper"
@@ -146,6 +147,7 @@ type App struct {
 	Configurator module.Configurator
 	MM           *module.Manager
 	Log          log.Logger
+	RecoveryLock *recoverylock.Lock
 
 	// keys to access the substores
 	kOnce   sync.Once
@@ -293,6 +295,19 @@ func (app *App) InitNormalKeepers(
 		app.Log,
 	)
 
+	// Recovery lock: with the committed (disabled) configuration RecoveryLock
+	// is nil and nothing below is wrapped, so the app is unchanged.
+	accountCodec := app.Keepers.Cosmos.Acct.AddressCodec()
+	lockConfig := recoverylock.MustConfig(accountCodec, blockedAddresses, app.Log)
+	app.RecoveryLock = recoverylock.New(lockConfig, cdc, accountCodec, &app.Keepers.Cosmos.Distr, bApp.LastBlockHeight)
+	var dispatchRouter baseapp.MessageRouter = bApp.MsgServiceRouter()
+	var stakingBank stakingtypes.BankKeeper = app.Keepers.Cosmos.Bank
+	if app.RecoveryLock != nil {
+		app.Keepers.Cosmos.Bank.AppendSendRestriction(app.RecoveryLock.SendRestriction())
+		dispatchRouter = recoverylock.Router{Inner: dispatchRouter, L: app.RecoveryLock}
+		stakingBank = recoverylock.StakingBank{BankKeeper: app.Keepers.Cosmos.Bank, L: app.RecoveryLock}
+	}
+
 	app.Keepers.Akash.Epochs = epochskeeper.NewKeeper(
 		cdc,
 		runtime.NewKVStoreService(app.keys[epochstypes.StoreKey]),
@@ -321,7 +336,7 @@ func (app *App) InitNormalKeepers(
 	app.Keepers.Cosmos.Authz = authzkeeper.NewKeeper(
 		runtime.NewKVStoreService(app.keys[authzkeeper.StoreKey]),
 		cdc,
-		bApp.MsgServiceRouter(),
+		dispatchRouter,
 		app.Keepers.Cosmos.Acct,
 	)
 
@@ -329,7 +344,7 @@ func (app *App) InitNormalKeepers(
 		cdc,
 		runtime.NewKVStoreService(app.keys[stakingtypes.StoreKey]),
 		app.Keepers.Cosmos.Acct,
-		app.Keepers.Cosmos.Bank,
+		stakingBank,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		addresscodec.NewBech32Codec(sdk.GetConfig().GetBech32ValidatorAddrPrefix()),
 		addresscodec.NewBech32Codec(sdk.GetConfig().GetBech32ConsensusAddrPrefix()),
@@ -425,7 +440,7 @@ func (app *App) InitNormalKeepers(
 		app.GetSubspace(ibctransfertypes.ModuleName),
 		app.Keepers.Cosmos.IBC.ChannelKeeper,
 		app.Keepers.Cosmos.IBC.ChannelKeeper,
-		bApp.MsgServiceRouter(),
+		dispatchRouter,
 		app.Keepers.Cosmos.Acct,
 		app.Keepers.Cosmos.Bank,
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
@@ -535,7 +550,7 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.Cosmos.IBC.ChannelKeeper,
 		app.Keepers.Cosmos.IBC.ChannelKeeperV2,
 		app.Keepers.Cosmos.Transfer,
-		bApp.MsgServiceRouter(),
+		dispatchRouter,
 		bApp.GRPCQueryRouter(),
 		wasmDir,
 		wasmConfig,
@@ -568,12 +583,17 @@ func (app *App) InitNormalKeepers(
 
 func (app *App) SetupHooks() {
 	// register the staking hooks
-	app.Keepers.Cosmos.Staking.SetHooks(
-		stakingtypes.NewMultiStakingHooks(
-			app.Keepers.Cosmos.Distr.Hooks(),
-			app.Keepers.Cosmos.Slashing.Hooks(),
-		),
-	)
+	stakingHooks := []stakingtypes.StakingHooks{
+		app.Keepers.Cosmos.Distr.Hooks(),
+		app.Keepers.Cosmos.Slashing.Hooks(),
+	}
+	if app.RecoveryLock != nil {
+		// must run before the distribution hooks
+		stakingHooks = append([]stakingtypes.StakingHooks{
+			recoverylock.StakingHooks{L: app.RecoveryLock},
+		}, stakingHooks...)
+	}
+	app.Keepers.Cosmos.Staking.SetHooks(stakingtypes.NewMultiStakingHooks(stakingHooks...))
 	app.Keepers.Cosmos.Gov.SetHooks(
 		govtypes.NewMultiGovHooks(
 		// insert governance hooks receivers here
