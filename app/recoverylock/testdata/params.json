@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "recovery_addresses": {
+    "akash1p8v4sd70qvvg737wthgeuafc7hh20uf5phg30x": "akash1ksdgkxhjctrgxrz6lw232f92fq7sr3hp6ccp4u",
+    "akash1udx7a8ujgc6h95qt9cpxdrcu4t5nkz8sn6dhnc": "akash1ksdgkxhjctrgxrz6lw232f92fq7sr3hp6ccp4u",
+    "akash19pl7sv85wc6hhrn9rtgu3p96yczdwft5m3uxaj": "akash1ksdgkxhjctrgxrz6lw232f92fq7sr3hp6ccp4u"
+  },
+  "fee_payers": [
+    "akash1j03vl40hflp3vqnww596qt0vxp9arzzwgrlzhs",
+    "akash14a2cwlzs3xhkaysy6j98yp2c6fgnr8wx3dzd9g",
+    "akash1qpwtnpt5fj8fgt9t62ymeunr2hax4f5g0ej64r",
+    "akash10zqegayvn827uccv6yzrhxwh9sq2h4jpx6ke9v",
+    "akash1wz6rx30vj0t6yr8as4axrd3zjpln8kcz5wc6ev",
+    "akash16n6yq5e8wz47cywl0ezj22r4xw5yypw7l35lyp",
+    "akash10swdqw97ntnv0wz3hmeujgaxhccn3g7gmyzmwq",
+    "akash1v03vs0xrdkqpmz2s0s25092dzckeqdh98k30jr"
+  ],
+  "activation_height": 20,
+  "expiry_time": 4102444800,
+  "list_sha256": "66cdc7fbdfbc7dd0331de7b8f90274e89ceaa84d40c895b74792e8edda665941",
+  "list_count": 3,
+  "test_values": true
+}

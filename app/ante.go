@@ -7,14 +7,16 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	govkeeper "github.com/cosmos/cosmos-sdk/x/gov/keeper"
 
+	"pkg.akt.dev/node/v2/app/recoverylock"
 	sinkkeeper "pkg.akt.dev/node/v2/x/sink/keeper"
 )
 
 // HandlerOptions extends the SDK's AnteHandler options
 type HandlerOptions struct {
 	ante.HandlerOptions
-	CDC       codec.BinaryCodec
-	GovKeeper *govkeeper.Keeper
+	CDC          codec.BinaryCodec
+	GovKeeper    *govkeeper.Keeper
+	RecoveryLock *recoverylock.Lock
 }
 
 // NewAnteHandler returns an AnteHandler that checks and increments sequence
@@ -51,6 +53,12 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewTxTimeoutHeightDecorator(),
 		ante.NewValidateMemoDecorator(options.AccountKeeper),
 		sinkkeeper.NewDepositDecorator(),
+	}
+	if options.RecoveryLock != nil {
+		// before fee deduction and signature checks; nil when the lock is disabled
+		anteDecorators = append(anteDecorators, recoverylock.Decorator{L: options.RecoveryLock})
+	}
+	anteDecorators = append(anteDecorators,
 		ante.NewConsumeGasForTxSizeDecorator(options.AccountKeeper),
 		ante.NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, nil),
 		ante.NewSetPubKeyDecorator(options.AccountKeeper), // SetPubKeyDecorator must be called before all signature verification decorators
@@ -58,7 +66,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler, options.SigVerifyOptions...),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
-	}
+	)
 
 	return sdk.ChainAnteDecorators(anteDecorators...), nil
 }
